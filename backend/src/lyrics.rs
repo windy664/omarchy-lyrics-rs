@@ -226,66 +226,6 @@ pub fn parse_ttml(text: &str) -> Vec<Line> {
         .collect()
 }
 
-// --- JSON 词级（binimum 等 {lines:[{startTimeMs,text,syllables}]} 形态） ----
-
-pub fn parse_json_lines(v: &serde_json::Value) -> Vec<Line> {
-    let arr = match v.get("lines").or(v.get("lyrics")).or(v.get("data")).or(v.get("result")) {
-        Some(a) if a.is_array() => a,
-        _ => return Vec::new(),
-    };
-    let mut lines: Vec<(u32, String, Option<Vec<Word>>)> = Vec::new();
-    for item in arr.as_array().unwrap() {
-        let ms = item
-            .get("startTimeMs")
-            .or(item.get("time"))
-            .or(item.get("begin"))
-            .and_then(|x| x.as_str().map(|s| s.parse::<u32>().ok()).unwrap_or(x.as_u64().map(|u| u as u32)))
-            .unwrap_or(0);
-        let text = item
-            .get("text")
-            .or(item.get("words"))
-            .or(item.get("line"))
-            .and_then(|x| x.as_str())
-            .unwrap_or("")
-            .trim()
-            .to_string();
-        if text.is_empty() {
-            continue;
-        }
-        let mut words = Vec::new();
-        if let Some(syl) = item.get("syllables").or(item.get("wordsArray")).and_then(|x| x.as_array()) {
-            for (i, w) in syl.iter().enumerate() {
-                let wt = w
-                    .get("startTimeMs")
-                    .or(w.get("time"))
-                    .or(w.get("begin"))
-                    .and_then(|x| {
-                        x.as_str().map(|s| s.parse::<u32>().ok()).unwrap_or(x.as_u64().map(|u| u as u32))
-                    })
-                    .unwrap_or(ms);
-                let wtext = w
-                    .get("text")
-                    .or(w.get("word"))
-                    .and_then(|x| x.as_str())
-                    .unwrap_or("")
-                    .trim()
-                    .to_string();
-                if !wtext.is_empty() {
-                    let _ = i;
-                    words.push(Word(wt, wtext));
-                }
-            }
-        }
-        let words = if words.len() > 1 { Some(words) } else { None };
-        lines.push((ms, text, words));
-    }
-    lines.sort_by_key(|l| l.0);
-    lines
-        .into_iter()
-        .map(|(ms, text, words)| Line { t: ms as f64 / 1000.0, text, words })
-        .collect()
-}
-
 // --- 纯文本兜底 ------------------------------------------------------------
 
 pub fn plain_to_lines(text: &str, duration_sec: f64) -> Vec<Line> {

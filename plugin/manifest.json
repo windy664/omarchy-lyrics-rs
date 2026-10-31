@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "id": "local.lyrics-rs",
+  "name": "Lyrics (Rust)",
+  "version": "0.1.0",
+  "author": "torin",
+  "license": "MIT",
+  "description": "Karaoke lyrics bar widget. Rust lyricsd backend does MPRIS + multi-source word-level lyrics; QML only renders.",
+  "kinds": ["service", "bar-widget"],
+  "keepLoaded": true,
+  "entryPoints": {
+    "service": "Service.qml",
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Lyrics",
+    "description": "Now-playing karaoke lyrics",
+    "category": "Media",
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": {
+      "hideWhenIdle": true,
+      "panelWidthPercent": 30,
+      "panelHeightPercent": 85
+    },
+    "schema": [
+      {
+        "key": "hideWhenIdle",
+        "type": "boolean",
+        "label": "无播放时隐藏",
+        "defaultValue": true
+      },
+      {
+        "key": "panelWidthPercent",
+        "type": "integer",
+        "label": "面板宽度（屏幕百分比）",
+        "min": 20,
+        "max": 60,
+        "defaultValue": 30
+      },
+      {
+        "key": "panelHeightPercent",
+        "type": "integer",
+        "label": "面板高度（屏幕百分比）",
+        "min": 40,
+        "max": 100,
+        "defaultValue": 85
+      }
+    ]
+  }
+}

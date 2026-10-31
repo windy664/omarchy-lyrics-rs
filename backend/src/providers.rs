@@ -19,7 +19,7 @@ pub struct TrackMeta {
 
 #[derive(Debug, Clone)]
 pub struct FetchResult {
-    pub source: String, // word:lrc.red | word:binimum | lrclib | cache | none
+    pub source: String, // word:lrc.red \
     pub lines: Vec<Line>,
     pub instrumental: bool,
     pub generation: u64, // 发起时的查询代号，main 侧用它丢弃换曲后迟到的过期结果
@@ -112,43 +112,20 @@ fn fetch_lrc_red(agent: &ureq::Agent, query: &str) -> Option<Vec<Line>> {
     if lines.is_empty() { None } else { Some(lines) }
 }
 
-/// binimum.org：BiniLyrics，返回 JSON（含 lines 数组或 ttml 字段）。
-fn fetch_binimum(agent: &ureq::Agent, m: &TrackMeta) -> Option<Vec<Line>> {
-    let mut url = format!(
-        "https://lyrics-api.binimum.org/getLyrics?s={}&a={}",
-        enc(&lyrics::clean_title(&m.title)),
-        enc(&lyrics::clean_artist(&m.artist))
+/// karalyr.com：开放词级卡拉OK库，API 形状与 LRCLIB 兼容，只服务词级（未命中 404）。
+/// syncedLyrics 为 Enhanced LRC（行内 <mm:ss.xx> 词标签），parse_lrc 直接消化。
+/// 2026-10-31 探测覆盖率仍接近 0，先接入占位，库长大后零成本生效。
+fn fetch_karalyr(agent: &ureq::Agent, m: &TrackMeta) -> Option<Vec<Line>> {
+    let url = format!(
+        "https://www.karalyr.com/api/get?artist_name={}&track_name={}",
+        enc(&lyrics::clean_artist(&m.artist)),
+        enc(&lyrics::clean_title(&m.title))
     );
-    if !m.album.is_empty() {
-        url.push_str(&format!("&al={}", enc(&m.album)));
-    }
-    if m.duration_sec > 0.0 {
-        url.push_str(&format!("&d={}", m.duration_sec.round() as i64));
-    }
     let body = get_text(agent, &url)?;
     let v: serde_json::Value = serde_json::from_str(&body).ok()?;
-    if let Some(ttml) = v.get("ttml").and_then(|t| t.as_str()) {
-        let lines = lyrics::parse_ttml(ttml);
-        if !lines.is_empty() {
-            return Some(lines);
-        }
-    }
-    let lines = lyrics::parse_json_lines(&v);
+    let synced = v.get("syncedLyrics")?.as_str()?;
+    let lines = lyrics::parse_lrc(synced);
     if lines.is_empty() { None } else { Some(lines) }
-}
-
-/// 词级查询：lrc.red 优先（Apple 词轴质量好），binimum 兜底。
-fn fetch_word_level(agent: &ureq::Agent, m: &TrackMeta) -> Option<(String, Vec<Line>)> {
-    let title = lyrics::clean_title(&m.title);
-    let artist = lyrics::clean_artist(&m.artist);
-    let query = format!("{title} {artist}");
-    if let Some(lines) = fetch_lrc_red(agent, &query) {
-        return Some(("word:lrc.red".into(), lines));
-    }
-    if let Some(lines) = fetch_binimum(agent, m) {
-        return Some(("word:binimum".into(), lines));
-    }
-    None
 }
 
 // --- LRCLIB ----------------------------------------------------------------
@@ -254,25 +231,39 @@ pub fn lookup(tx: Sender<FetchResult>, meta: TrackMeta, bypass_cache: bool, gene
     let agent = http();
     let mut result: Option<FetchResult> = None;
 
-    // 词级与行级两路并发，词级优先、行级 12 秒兜底
+    // 词级（lrc.red ‖ karalyr 并发）与行级（LRCLIB）三路并发，词级优先、行级 12 秒兜底
+    // binimum.org 已退役：2026-10-31 实测其 API 307 重定向到 lrc.red，是同一家
     enum Msg {
         Word(String, Vec<Line>),
         Line(String, Vec<Line>, bool),
     }
     let (ltx, lrx) = std::sync::mpsc::channel::<Msg>();
     let ltx2 = ltx.clone();
+    let ltx3 = ltx.clone();
     let m1 = meta.clone();
     let m2 = meta.clone();
+    let m3 = meta.clone();
     let agent1 = http();
+    let agent2 = http();
     std::thread::scope(|s| {
         s.spawn(move || {
-            if let Some((src, lines)) = fetch_word_level(&agent1, &m1) {
-                let _ = ltx.send(Msg::Word(src, lines));
+            let query = format!(
+                "{} {}",
+                lyrics::clean_title(&m1.title),
+                lyrics::clean_artist(&m1.artist)
+            );
+            if let Some(lines) = fetch_lrc_red(&agent1, &query) {
+                let _ = ltx.send(Msg::Word("word:lrc.red".into(), lines));
+            }
+        });
+        s.spawn(move || {
+            if let Some(lines) = fetch_karalyr(&agent2, &m3) {
+                let _ = ltx2.send(Msg::Word("word:karalyr".into(), lines));
             }
         });
         s.spawn(move || {
             if let Some((src, lines, inst)) = fetch_lrclib(&agent, &m2) {
-                let _ = ltx2.send(Msg::Line(src, lines, inst));
+                let _ = ltx3.send(Msg::Line(src, lines, inst));
             }
         });
         let mut word: Option<(String, Vec<Line>)> = None;
