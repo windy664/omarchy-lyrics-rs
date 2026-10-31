@@ -101,8 +101,9 @@ BarWidget {
     Text {
       anchors.verticalCenter: parent.verticalCenter
       readonly property bool isAd: root.lyricsService && root.lyricsService.status === "ad"
-      text: root.themedRich !== "" ? root.themedRich
-            : root.isAd ? (root.lyricsService.statusMsg || "")
+      text: root.isAd ? (root.lyricsService.statusMsg || "广告插播中")
+            : root.themedRich !== ""
+            ? root.themedRich
             : (root.hasTrack ? root.lyricsService.lineText : "")
       textFormat: Text.StyledText
       font.family: root.bar ? root.bar.fontFamily : Style.font.family

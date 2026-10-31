@@ -111,6 +111,15 @@ Item {
         break
       case "track":
         root.track = ev.title ? ev : {}
+        // 换曲即清显示态：否则广告插播期间（无词可查）顶栏会一直挂着上一首的歌词行
+        root.lines = []
+        root.linesSource = ""
+        root.lineIndex = -1
+        root.lineRich = ""
+        root.lineText = ""
+        root.wordIndex = -1
+        root.status = ""
+        root.statusMsg = ""
         break
       case "lines":
         root.lines = ev.synced || []
@@ -150,6 +159,8 @@ Item {
         playing: root.playing,
         line: root.lineIndex,
         source: root.linesSource,
+        status: root.status,
+        statusMsg: root.statusMsg,
         backend: root.backendUp
       })
     }
