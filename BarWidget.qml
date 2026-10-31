@@ -154,6 +154,8 @@ BarWidget {
     owner: root
     bar: root.bar
     centerOnBar: false
+    // 关掉宿主默认的卡片边框（主题 popups border 偏紫，与中性配色冲突）
+    borderSpec: Border.none()
 
     readonly property var scr: (bar && bar.screen) ? bar.screen : Quickshell.screens[0]
     contentWidth: Math.round((scr ? scr.width : 1200) * root.setting("panelWidthPercent", 30) / 100)
