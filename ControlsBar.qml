@@ -35,7 +35,7 @@ Item {
 
     font.family: Style.font.family
     font.pixelSize: Style.font.subtitle
-    color: Color.foreground
+    color: "#FFFFFF"
     // iOS 风：只用前景色明暗表达状态，不掺 accent
     opacity: dimmed ? 0.35 : (ma.containsMouse ? 1.0 : 0.8)
     Behavior on opacity { NumberAnimation { duration: 150 } }
@@ -67,7 +67,7 @@ Item {
       width: parent.width
       height: 3
       radius: 1.5
-      color: Color.foreground
+      color: "#FFFFFF"
       opacity: 0.16
     }
     Rectangle {
@@ -75,7 +75,7 @@ Item {
       width: parent.width * slider.ratio
       height: 3
       radius: 1.5
-      color: Color.foreground
+      color: "#FFFFFF"
       opacity: 0.9
     }
     Rectangle {
@@ -84,7 +84,7 @@ Item {
       width: slider.dragging || ma.containsMouse ? 12 : 8
       height: width
       radius: width / 2
-      color: Color.foreground
+      color: "#FFFFFF"
       Behavior on width { NumberAnimation { duration: 100 } }
     }
 
@@ -169,7 +169,7 @@ Item {
         text: root.fmt(root.service ? root.service.positionSec : 0)
         font.family: Style.font.family
         font.pixelSize: Style.font.bodySmall
-        color: Color.muted
+        color: "#9A9A9A"
       }
 
       ThemeSlider {
@@ -186,7 +186,7 @@ Item {
         text: root.fmt(root.duration)
         font.family: Style.font.family
         font.pixelSize: Style.font.bodySmall
-        color: Color.muted
+        color: "#9A9A9A"
       }
     }
   }

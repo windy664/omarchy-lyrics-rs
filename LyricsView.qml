@@ -28,7 +28,7 @@ Item {
           : "没有正在播放的音乐"
     font.family: Style.font.family
     font.pixelSize: Style.font.subtitle
-    color: Color.muted
+    color: "#9A9A9A"
   }
 
   ListView {
@@ -62,12 +62,9 @@ Item {
       height: root.rowH
 
       readonly property bool isCurrent: index === root.currentLine
-      // iOS Apple Music 同款：全程只有主题主文字色一种色调，
-      // 当前行实、未唱词虚（约 40% 透明度），非当前行纯透明度淡化，不掺 accent 等第三色
-      readonly property string dimForeground: {
-        const f = String(Color.foreground)
-        return "#" + "66" + (f[0] === "#" ? f.slice(1) : f)
-      }
+      // iOS Apple Music 同款：中性纯白（不用主题前景——Catppuccin 文字色带薰衣草偏紫），
+      // 当前行实、未唱词虚（约 40% 透明度），非当前行纯透明度淡化
+      readonly property string dimForeground: "#66FFFFFF"
 
       opacity: isCurrent ? 1.0 : (Math.abs(index - root.currentLine) === 1 ? 0.62 : 0.45)
       Behavior on opacity { NumberAnimation { duration: 180 } }
@@ -83,7 +80,7 @@ Item {
         font.family: Style.font.family
         font.pixelSize: root.isCurrent ? Style.font.heading : Style.font.subtitle
         font.bold: isCurrent
-        color: Color.foreground
+        color: "#FFFFFF"
         // 单行槽位：超长行省略号截断，保证视窗永远是整齐的 3 行；整行水平居中
         elide: Text.ElideMiddle
         horizontalAlignment: Text.AlignHCenter
