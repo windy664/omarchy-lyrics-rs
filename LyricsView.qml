@@ -68,7 +68,7 @@ Item {
         return "#" + "78" + (a[0] === "#" ? a.slice(1) : a)
       }
 
-      opacity: isCurrent ? 1.0 : (Math.abs(index - root.currentLine) === 1 ? 0.55 : 0.3)
+      opacity: isCurrent ? 1.0 : (Math.abs(index - root.currentLine) === 1 ? 0.7 : 0.45)
       Behavior on opacity { NumberAnimation { duration: 180 } }
 
       Text {
@@ -82,7 +82,7 @@ Item {
         font.family: Style.font.family
         font.pixelSize: root.isCurrent ? Style.font.heading : Style.font.subtitle
         font.bold: isCurrent
-        color: isCurrent ? Color.accent : Color.muted
+        color: isCurrent ? Color.accent : Color.foreground
         // 单行槽位：超长行省略号截断，保证视窗永远是整齐的 5 行
         elide: Text.ElideMiddle
         verticalAlignment: Text.AlignVCenter
