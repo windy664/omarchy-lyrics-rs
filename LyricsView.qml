@@ -84,8 +84,9 @@ Item {
         font.pixelSize: root.isCurrent ? Style.font.heading : Style.font.subtitle
         font.bold: isCurrent
         color: Color.foreground
-        // 单行槽位：超长行省略号截断，保证视窗永远是整齐的 5 行
+        // 单行槽位：超长行省略号截断，保证视窗永远是整齐的 3 行；整行水平居中
         elide: Text.ElideMiddle
+        horizontalAlignment: Text.AlignHCenter
         verticalAlignment: Text.AlignVCenter
 
         Behavior on color { ColorAnimation { duration: 250 } }
