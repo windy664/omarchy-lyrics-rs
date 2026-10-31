@@ -25,6 +25,7 @@ Item {
   property string status: ""        // no_lyrics / ad 等
   property string statusMsg: ""     // status 附带文案（广告文案等）
   property bool backendUp: false
+  property bool panelRequested: false // IPC 远程开面板（CLI 调试/自动化用）
 
   readonly property bool hasTrack: track && track.title ? true : false
 
@@ -139,6 +140,9 @@ Item {
 
     function refresh(): void {
       root.refresh()
+    }
+    function panel(): void {
+      root.panelRequested = true
     }
     function status(): string {
       return JSON.stringify({

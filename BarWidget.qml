@@ -141,15 +141,17 @@ BarWidget {
 
     readonly property var scr: (bar && bar.screen) ? bar.screen : Quickshell.screens[0]
     contentWidth: Math.round((scr ? scr.width : 1200) * root.setting("panelWidthPercent", 30) / 100)
-    contentHeight: Math.round((scr ? scr.height : 800) * root.setting("panelHeightPercent", 85) / 100)
+    // 高度贴合内容（5 行歌词 + 控制条），不再吃满屏幕百分比
+    contentHeight: contentCol.implicitHeight + verticalContentInset
 
     Column {
+      id: contentCol
       anchors.fill: parent
       spacing: Style.space(10)
 
       LyricsView {
         width: parent.width
-        height: parent.height - controls.implicitHeight - parent.spacing
+        height: implicitHeight
         service: root.lyricsService
       }
 

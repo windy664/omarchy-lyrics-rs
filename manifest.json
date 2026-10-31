@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "local.lyrics-rs",
   "name": "Lyrics (Rust)",
-  "version": "0.2.0",
+  "version": "0.2.2",
   "author": "torin",
   "license": "MIT",
   "description": "Karaoke lyrics bar widget. Rust lyricsd backend does MPRIS + multi-source word-level lyrics; QML only renders.",
@@ -20,8 +20,7 @@
     "defaultSection": "right",
     "defaults": {
       "hideWhenIdle": true,
-      "panelWidthPercent": 30,
-      "panelHeightPercent": 85
+      "panelWidthPercent": 30
     },
     "schema": [
       {
@@ -37,14 +36,6 @@
         "min": 20,
         "max": 60,
         "defaultValue": 30
-      },
-      {
-        "key": "panelHeightPercent",
-        "type": "integer",
-        "label": "面板高度（屏幕百分比）",
-        "min": 40,
-        "max": 100,
-        "defaultValue": 85
       },
       {
         "key": "wheelAction",
