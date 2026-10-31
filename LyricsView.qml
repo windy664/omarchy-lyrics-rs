@@ -62,6 +62,11 @@ Item {
       height: root.rowH
 
       readonly property bool isCurrent: index === root.currentLine
+      // 当前行整体蓝调：已唱纯 accent，未唱半透明 accent（muted 在浅色面板上看着发白）
+      readonly property string unsungColor: {
+        const a = String(Color.accent)
+        return "#" + "78" + (a[0] === "#" ? a.slice(1) : a)
+      }
 
       opacity: isCurrent ? 1.0 : (Math.abs(index - root.currentLine) === 1 ? 0.55 : 0.3)
       Behavior on opacity { NumberAnimation { duration: 180 } }
@@ -71,7 +76,7 @@ Item {
         width: parent.width
         // 当前行用后端推送的 rich（词级逐词点亮），其余行纯文本
         text: isCurrent && root.service && root.service.lineRich !== ""
-              ? String(root.service.lineRich).replace(/#888888/g, String(Color.muted))
+              ? String(root.service.lineRich).replace(/#888888/g, root.unsungColor)
               : modelData.text
         textFormat: Text.StyledText
         font.family: Style.font.family
