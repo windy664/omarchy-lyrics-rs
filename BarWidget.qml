@@ -152,7 +152,7 @@ BarWidget {
 
     readonly property var scr: (bar && bar.screen) ? bar.screen : Quickshell.screens[0]
     contentWidth: Math.round((scr ? scr.width : 1200) * root.setting("panelWidthPercent", 30) / 100)
-    // 高度贴合内容（5 行歌词 + 控制条），不再吃满屏幕百分比
+    // 高度贴合内容（3 行歌词 + 控制条），不再吃满屏幕百分比
     contentHeight: contentCol.implicitHeight + verticalContentInset
 
     Column {

@@ -13,7 +13,7 @@ Item {
   readonly property bool hasLyrics: service && service.lines && service.lines.length > 0
   // 单行槽位高度：容纳当前行的大号字体，5 槽 = 视窗总高
   readonly property real rowH: Style.space(38)
-  readonly property int windowRows: 5
+  readonly property int windowRows: 3
 
   // 面板高度自适应内容：有词时 = 5 行视窗，无词时 = 兜底文案高度
   implicitHeight: hasLyrics ? rowH * windowRows : Style.space(80)
