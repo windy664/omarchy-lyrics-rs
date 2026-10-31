@@ -31,9 +31,9 @@
 
 | # | 假设 | 结果 | 日期 |
 |---|------|------|------|
-| 1 | hideWhenIdle 字符串导致零宽度 | ☐ 待验证 | |
-| 2 | 隐式依赖 omarchy.media | ☐ 待验证 | |
-| 3 | Spotify MPRIS 元数据完整 | ☐ 待验证 | |
+| 1 | hideWhenIdle 字符串导致零宽度 | ☐ 待验证（需装回原插件；本机已无残留设置，`~/.config/omarchy`、`~/.local/state/omarchy` 均未找到 hideWhenIdle，只有 `~/.cache/omarchy/lyrics` 缓存目录残留；代码层面 `=== true` 已实锤，见 docs/02 源码实读 #6） | 2026-10-31 |
+| 2 | 隐式依赖 omarchy.media | ☐ 待验证（`omarchy plugin list` 再次确认 omarchy.media 为 disabled；因果是否成立需装回原插件对照） | 2026-10-31 |
+| 3 | Spotify MPRIS 元数据完整 | ✅ 已验证：Paused 状态下 Metadata 齐全（artist/album/title/length/artUrl 均有值）；注意 Spotify 同时注册两个 bus（`org.mpris.MediaPlayer2.spotify` 与 `org.mpris.MediaPlayer2.chromium.instance3302302`，同一 PID），**选活跃播放器必须按 bus 名/PID 去重** | 2026-10-31 |
 
 ## 经验教训（写进重写设计）
 
