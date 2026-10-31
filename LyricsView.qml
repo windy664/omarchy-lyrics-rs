@@ -2,9 +2,8 @@ import QtQuick
 import qs.Commons
 import qs.Ui
 
-// 歌词全文面板：ListView 渲染，QML 只做渲染和点击，不做时间计算。
-// 默认自动跟随当前行；用户滚动进入浏览模式，2.5s 后自动回到跟随；
-// 点击行跳播（后端经 MPRIS SetPosition，不支持时后端自行忽略）。
+// 歌词全文面板：固定 5 行视窗，当前行锁定正中间（上 2 行 + 当前行 + 下 2 行）。
+// 不滚动、不浏览；点击某行跳播（后端经 MPRIS SetPosition，不支持时后端自行忽略）。
 Item {
   id: root
 
@@ -12,38 +11,14 @@ Item {
   readonly property int currentLine: service ? service.lineIndex : -1
   readonly property bool hasLyrics: service && service.lines && service.lines.length > 0
 
-  // 浏览模式：手动滚动后暂停自动跟随
-  property bool browseMode: false
-
-  function follow() {
-    if (browseMode || !hasLyrics || currentLine < 0) return
-    if (listView.count <= 0) return
-    listView.positionViewAtIndex(Math.min(currentLine, listView.count - 1), ListView.Contain)
-  }
-
-  function enterBrowse() {
-    browseMode = true
-    returnTimer.restart()
-  }
-
-  Timer {
-    id: returnTimer
-    interval: 2500
-    onTriggered: {
-      root.browseMode = false
-      root.follow()
-    }
-  }
-
-  onCurrentLineChanged: follow()
-  onHasLyricsChanged: {
-    if (hasLyrics) follow()
-  }
+  // 单行槽位高度：容纳当前行的大号字体，5 槽 = 视窗总高
+  readonly property real rowH: Style.space(38)
+  readonly property int windowRows: 5
 
   // 暂无歌词兜底文案（部件不消失，由 BarWidget 保证）
   Text {
     anchors.centerIn: parent
-    visible: !hasLyrics
+    visible: !root.hasLyrics
     text: service && service.hasTrack
           ? (service.status === "ad" ? (service.statusMsg || "广告插播中")
             : service.status === "no_lyrics" ? "暂无歌词" : "正在查找歌词…")
@@ -55,31 +30,41 @@ Item {
 
   ListView {
     id: listView
-    anchors.fill: parent
-    anchors.margins: Style.space(16)
     visible: root.hasLyrics
     clip: true
-    spacing: Style.space(6)
-    model: root.service ? root.service.lines : []
+    width: parent.width
+    height: root.rowH * root.windowRows
+    anchors.verticalCenter: parent.verticalCenter
+    anchors.leftMargin: Style.space(16)
+    anchors.rightMargin: Style.space(16)
 
-    onMovementStarted: root.enterBrowse()
-    onCountChanged: root.follow()
+    model: root.service ? root.service.lines : []
+    currentIndex: root.currentLine
+    interactive: false
+
+    // StrictlyEnforceRange：无论怎么动，当前行永远钉在视窗正中的槽位
+    highlightRangeMode: ListView.StrictlyEnforceRange
+    preferredHighlightBegin: height / 2 - root.rowH / 2
+    preferredHighlightEnd: height / 2 + root.rowH / 2
+    snapMode: ListView.SnapToItem
+    cacheBuffer: root.rowH * 4
+
+    Behavior on height { NumberAnimation { duration: 150 } }
 
     delegate: Item {
       required property var modelData
       required property int index
 
       width: listView.width
-      height: lineText.implicitHeight + Style.space(4)
+      height: root.rowH
 
-      readonly property int distance: Math.abs(index - root.currentLine)
       readonly property bool isCurrent: index === root.currentLine
 
-      opacity: isCurrent ? 1.0 : (distance <= 3 ? 0.55 : 0.3)
+      opacity: isCurrent ? 1.0 : (Math.abs(index - root.currentLine) === 1 ? 0.55 : 0.3)
       Behavior on opacity { NumberAnimation { duration: 180 } }
 
       Text {
-        id: lineText
+        anchors.verticalCenter: parent.verticalCenter
         width: parent.width
         // 当前行用后端推送的 rich（词级逐词点亮），其余行纯文本
         text: isCurrent && root.service && root.service.lineRich !== ""
@@ -90,10 +75,11 @@ Item {
         font.pixelSize: root.isCurrent ? Style.font.heading : Style.font.subtitle
         font.bold: isCurrent
         color: isCurrent ? Color.accent : Color.muted
-        // DMP 基准：新当前行淡入（颜色渐变 + 既有的透明度过渡）
-        Behavior on color { ColorAnimation { duration: 250 } }
-        wrapMode: Text.WordWrap
+        // 单行槽位：超长行省略号截断，保证视窗永远是整齐的 5 行
+        elide: Text.ElideMiddle
         verticalAlignment: Text.AlignVCenter
+
+        Behavior on color { ColorAnimation { duration: 250 } }
       }
 
       MouseArea {
@@ -104,39 +90,6 @@ Item {
             root.service.sendCommand({ "cmd": "seek", "sec": modelData.t })
           }
         }
-      }
-    }
-  }
-
-  // "回到当前行"按钮（仅浏览模式显示）
-  Rectangle {
-    anchors.bottom: parent.bottom
-    anchors.horizontalCenter: parent.horizontalCenter
-    anchors.bottomMargin: Style.space(12)
-    width: backText.implicitWidth + Style.space(20)
-    height: backText.implicitHeight + Style.space(8)
-    radius: Style.space(10)
-    visible: browseMode && hasLyrics
-    color: Color.composed("bar.background", "bar.background-alpha", Color.background, 0.9)
-    border.width: 1
-    border.color: Color.popups.border
-
-    Text {
-      id: backText
-      anchors.centerIn: parent
-      text: "回到当前行"
-      font.family: Style.font.family
-      font.pixelSize: Style.font.bodySmall
-      color: Color.bar.text
-    }
-
-    MouseArea {
-      anchors.fill: parent
-      cursorShape: Qt.PointingHandCursor
-      onClicked: {
-        returnTimer.stop()
-        root.browseMode = false
-        root.follow()
       }
     }
   }
