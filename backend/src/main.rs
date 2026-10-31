@@ -355,6 +355,7 @@ async fn run() -> zbus::Result<()> {
     let mut lookup_at: Option<Instant> = None;
     let mut bypass_cache = false;
     let mut lookup_gen: u64 = 0;
+    let mut none_retries: u32 = 0; // 同一首曲目查空后的自动重试计数（词源临时故障兜底）
     let mut last_poll = Instant::now() - Duration::from_secs(3600);
     let mut last_position_emit = Instant::now();
     let mut last_playing = false;
@@ -390,6 +391,7 @@ async fn run() -> zbus::Result<()> {
                     bypass_cache = false;
                     lookup_gen += 1;
                     lookup_at = Some(now + Duration::from_millis(700));
+                    none_retries = 0;
                 }
             }
         }
@@ -470,6 +472,13 @@ async fn run() -> zbus::Result<()> {
             if res.source == "none" || res.lines.is_empty() {
                 lyrics_state.lines.clear();
                 emit(serde_json::json!({ "ev": "status", "msg": "no_lyrics" }));
+                // 词源临时故障（如 LRCLIB 间歇 503）兜底：30s 后重查，同一首最多 3 次
+                if none_retries < 3 {
+                    none_retries += 1;
+                    lookup_gen += 1;
+                    lookup_at = Some(Instant::now() + Duration::from_secs(30));
+                    tracing::info!(retry = none_retries, "no lyrics; retry scheduled in 30s");
+                }
                 break;
             }
             lyrics_state.lines = res.lines;
