@@ -1,10 +1,14 @@
 import QtQuick
 import QtQuick.Layouts
+import Quickshell
+import Quickshell.Io
 import qs.Commons
 import qs.Ui
 
-// 面板底部播放控制条（DMP 基准）：上一曲 / 播放暂停 / 下一曲 + seek 进度条。
-// 全部经 Service.sendCommand 下发，MPRIS 不可用时后端自行忽略。
+// 面板底部控制区：随机/循环/上一曲/播放暂停/下一曲/重匹配歌词 + seek 进度条 + 音量条。
+// 全部经 Service.sendCommand 下发（音量走 wpctl 主音量）；MPRIS 不可用时后端自行忽略。
+// 注意：Spotify 官方 Linux 客户端不接受 MPRIS 对 Shuffle/LoopStatus 的写入（只读），
+// 按钮在该播放器上显示真实状态但点击无效；mpv/VLC 等正常播放器完全可用。
 Item {
   id: root
 
@@ -13,6 +17,8 @@ Item {
 
   readonly property real duration: service && service.track && service.track.durationSec > 0 ? service.track.durationSec : 0
   readonly property bool playing: service ? service.playing : false
+  readonly property bool shuffleOn: service ? service.shuffle === true : false
+  readonly property string loopStatus: service ? (service.loopStatus || "None") : "None"
 
   implicitHeight: col.implicitHeight
 
@@ -25,12 +31,22 @@ Item {
     return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0")
   }
 
+  function readVolume() {
+    volGet.running = true
+  }
+
+  Component.onCompleted: readVolume()
+
   component CtrlButton: Text {
     property var action: null
+    property bool dimmed: false
 
     font.family: Style.font.family
     font.pixelSize: Style.font.subtitle
-    color: ma.containsMouse ? Color.accent : Color.bar.text
+    color: Color.foreground
+    // iOS 风：只用前景色明暗表达状态，不掺 accent
+    opacity: dimmed ? 0.35 : (ma.containsMouse ? 1.0 : 0.8)
+    Behavior on opacity { NumberAnimation { duration: 150 } }
 
     MouseArea {
       id: ma
@@ -41,6 +57,86 @@ Item {
     }
   }
 
+  // 主题色滑杆（自绘替代宿主 PanelSlider，去 accent 蓝）：槽/已播/手柄全是前景色明暗
+  component ThemeSlider: Item {
+    id: slider
+    property real maximum: 1
+    property real value: 0
+    property bool dragging: false
+    property real dragValue: 0
+    readonly property real shown: dragging ? dragValue : value
+    readonly property real ratio: maximum > 0 ? Math.min(Math.max(shown / maximum, 0), 1) : 0
+    signal released(real v)
+
+    implicitHeight: Style.space(16)
+
+    Rectangle {
+      anchors.verticalCenter: parent.verticalCenter
+      width: parent.width
+      height: 3
+      radius: 1.5
+      color: Color.foreground
+      opacity: 0.16
+    }
+    Rectangle {
+      anchors.verticalCenter: parent.verticalCenter
+      width: parent.width * slider.ratio
+      height: 3
+      radius: 1.5
+      color: Color.foreground
+      opacity: 0.9
+    }
+    Rectangle {
+      anchors.verticalCenter: parent.verticalCenter
+      x: Math.min(Math.max(slider.width * slider.ratio - width / 2, 0), Math.max(slider.width - width, 0))
+      width: slider.dragging || ma.containsMouse ? 12 : 8
+      height: width
+      radius: width / 2
+      color: Color.foreground
+      Behavior on width { NumberAnimation { duration: 100 } }
+    }
+
+    MouseArea {
+      id: ma
+      anchors.fill: parent
+      anchors.margins: -Style.space(6)
+      hoverEnabled: true
+      cursorShape: Qt.PointingHandCursor
+      function pick(x) {
+        slider.dragValue = Math.min(Math.max(x / slider.width, 0), 1) * slider.maximum
+      }
+      onPressed: function(mouse) {
+        slider.dragging = true
+        pick(mouse.x)
+      }
+      onPositionChanged: function(mouse) {
+        if (slider.dragging) pick(mouse.x)
+      }
+      onReleased: function(mouse) {
+        pick(mouse.x)
+        slider.dragging = false
+        slider.released(slider.dragValue)
+      }
+      onCanceled: slider.dragging = false
+    }
+  }
+
+  Process {
+    id: volGet
+    command: ["sh", "-c", "wpctl get-volume @DEFAULT_AUDIO_SINK@"]
+    stdout: SplitParser {
+      onRead: function(data) {
+        const s = String(data)
+        const m = s.match(/([0-9.]+)/)
+        if (m) root.volValue = Math.min(parseFloat(m[1]), 1.0)
+        root.volMuted = /MUTED/.test(s)
+      }
+    }
+  }
+
+  property real volValue: 0
+  property bool volMuted: false
+
   ColumnLayout {
     id: col
     anchors.left: parent.left
@@ -49,10 +145,23 @@ Item {
 
     RowLayout {
       Layout.fillWidth: true
-      spacing: Style.space(24)
+      spacing: Style.space(20)
+
+      // 左：随机 / 循环
+      CtrlButton {
+        text: "󰒓"
+        dimmed: !root.shuffleOn
+        action: function() { root.send({ "cmd": "shuffle" }) }
+      }
+      CtrlButton {
+        text: root.loopStatus === "Track" ? "󰑙" : "󰑗"
+        dimmed: root.loopStatus === "None"
+        action: function() { root.send({ "cmd": "loop" }) }
+      }
 
       Item { Layout.fillWidth: true }
 
+      // 中：上一曲 / 播放暂停 / 下一曲
       CtrlButton {
         text: "󰒮"
         action: function() { root.send({ "cmd": "prev" }) }
@@ -68,6 +177,12 @@ Item {
       }
 
       Item { Layout.fillWidth: true }
+
+      // 右：重匹配歌词（bypass 缓存重查词源）
+      CtrlButton {
+        text: "󰑐"
+        action: function() { root.send({ "cmd": "refresh" }) }
+      }
     }
 
     RowLayout {
@@ -81,12 +196,11 @@ Item {
         color: Color.muted
       }
 
-      PanelSlider {
+      ThemeSlider {
         Layout.fillWidth: true
-        bar: root.bar
         enabled: root.duration > 0
         maximum: root.duration > 0 ? root.duration : 1
-        value: !dragging && root.duration > 0 && root.service ? Math.min(root.service.positionSec, root.duration) : 0
+        value: root.duration > 0 && root.service ? Math.min(root.service.positionSec, root.duration) : 0
         onReleased: function(v) {
           if (root.duration > 0) root.send({ "cmd": "seek", "sec": v })
         }
@@ -99,5 +213,45 @@ Item {
         color: Color.muted
       }
     }
+
+    RowLayout {
+      Layout.fillWidth: true
+      spacing: Style.space(10)
+
+      CtrlButton {
+        Layout.preferredWidth: Style.font.subtitle * 1.2
+        font.pixelSize: Style.font.subtitle
+        text: "󰕾"
+        dimmed: root.volMuted
+        action: function() {
+          Util.execDetached("wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle")
+          muteSync.restart()
+        }
+      }
+
+      ThemeSlider {
+        id: volSlider
+        Layout.fillWidth: true
+        maximum: 1.0
+        value: root.volMuted ? 0 : root.volValue
+        onReleased: function(v) {
+          Util.execDetached("wpctl set-volume @DEFAULT_AUDIO_SINK@ " + Math.min(v, 1.5).toFixed(2))
+          muteSync.restart()
+        }
+      }
+
+      Text {
+        text: Math.round(volSlider.shown * 100) + "%"
+        font.family: Style.font.family
+        font.pixelSize: Style.font.bodySmall
+        color: Color.muted
+      }
+    }
+  }
+
+  Timer {
+    id: muteSync
+    interval: 200
+    onTriggered: root.readVolume()
   }
 }

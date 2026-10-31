@@ -69,7 +69,7 @@ Item {
         return "#" + "66" + (f[0] === "#" ? f.slice(1) : f)
       }
 
-      opacity: isCurrent ? 1.0 : (Math.abs(index - root.currentLine) === 1 ? 0.45 : 0.28)
+      opacity: isCurrent ? 1.0 : (Math.abs(index - root.currentLine) === 1 ? 0.62 : 0.45)
       Behavior on opacity { NumberAnimation { duration: 180 } }
 
       Text {

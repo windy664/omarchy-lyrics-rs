@@ -24,6 +24,8 @@ Item {
   property real positionSec: 0
   property string status: ""        // no_lyrics / ad 等
   property string statusMsg: ""     // status 附带文案（广告文案等）
+  property bool shuffle: false      // MPRIS Shuffle（后端每 2s 同步）
+  property string loopStatus: "None" // MPRIS LoopStatus: None / Track / Playlist
   property bool backendUp: false
   property bool panelRequested: false // IPC 远程开面板（CLI 调试/自动化用）
 
@@ -139,6 +141,10 @@ Item {
         root.status = ev.msg || ""
         root.statusMsg = ev.text || ""
         break
+      case "player":
+        root.shuffle = ev.shuffle === true
+        root.loopStatus = ev.loop || "None"
+        break
       default:
         break
     }
@@ -161,6 +167,8 @@ Item {
         source: root.linesSource,
         status: root.status,
         statusMsg: root.statusMsg,
+        shuffle: root.shuffle,
+        loop: root.loopStatus,
         backend: root.backendUp
       })
     }

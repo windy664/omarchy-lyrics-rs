@@ -30,6 +30,14 @@ trait MprisPlayer {
     fn play_pause(&self) -> zbus::Result<()>;
     fn next(&self) -> zbus::Result<()>;
     fn previous(&self) -> zbus::Result<()>;
+    #[zbus(property)]
+    fn shuffle(&self) -> zbus::Result<bool>;
+    #[zbus(property)]
+    fn set_shuffle(&self, shuffle: bool) -> zbus::Result<()>;
+    #[zbus(property)]
+    fn loop_status(&self) -> zbus::Result<String>;
+    #[zbus(property)]
+    fn set_loop_status(&self, status: String) -> zbus::Result<()>;
 }
 
 #[proxy(interface = "org.mpris.MediaPlayer2", assume_defaults = true)]
@@ -92,6 +100,16 @@ fn emit(v: serde_json::Value) {
     let mut out = std::io::stdout().lock();
     let _ = writeln!(out, "{v}");
     let _ = out.flush();
+}
+
+// 播放器状态（Shuffle/LoopStatus）→ QML 面板开关按钮；不支持的播放器按关闭兜底
+async fn emit_player_state(proxy: &MprisPlayerProxy<'_>) {
+    let shuffle = proxy.shuffle().await.unwrap_or(false);
+    let loop_status = proxy
+        .loop_status()
+        .await
+        .unwrap_or_else(|_| "None".to_string());
+    emit(serde_json::json!({ "ev": "player", "shuffle": shuffle, "loop": loop_status }));
 }
 
 fn owned_to_string(v: &OwnedValue) -> Option<String> {
@@ -359,6 +377,7 @@ async fn run() -> zbus::Result<()> {
     let mut last_poll = Instant::now() - Duration::from_secs(3600);
     let mut last_position_emit = Instant::now();
     let mut last_playing = false;
+    let mut last_player_emit = Instant::now() - Duration::from_secs(3600);
 
     loop {
         async_io::Timer::after(Duration::from_millis(100)).await;
@@ -387,6 +406,7 @@ async fn run() -> zbus::Result<()> {
                 if poll_player(p, &mut last_track_key).await && !p.track.is_empty() {
                     tracing::info!(artist = %p.track.artist, title = %p.track.title, bus = %p.bus, "track changed");
                     emit_track(&p.track);
+                    emit_player_state(&p.proxy).await;
                     lyrics_state = LyricsState { lines: Vec::new(), cur_line: -1, cur_word: -1 };
                     bypass_cache = false;
                     lookup_gen += 1;
@@ -464,6 +484,34 @@ async fn run() -> zbus::Result<()> {
                         }
                     }
                 }
+                Some("shuffle") => {
+                    if let Some(p) = player.as_ref() {
+                        let cur = p.proxy.shuffle().await.unwrap_or(false);
+                        let want = cmd.get("on").and_then(|v| v.as_bool()).unwrap_or(!cur);
+                        if let Err(e) = p.proxy.set_shuffle(want).await {
+                            tracing::warn!(err = %e, "set_shuffle failed");
+                        }
+                        emit_player_state(&p.proxy).await;
+                    }
+                }
+                Some("loop") => {
+                    if let Some(p) = player.as_ref() {
+                        // MPRIS LoopStatus：None → Playlist(列表循环) → Track(单曲循环) → None
+                        let cur = p.proxy.loop_status().await.unwrap_or_else(|_| "None".into());
+                        let want = match cmd.get("mode").and_then(|v| v.as_str()) {
+                            Some(m @ ("None" | "Track" | "Playlist")) => m.to_string(),
+                            _ => match cur.as_str() {
+                                "None" => "Playlist".to_string(),
+                                "Track" => "None".to_string(),
+                                _ => "Track".to_string(),
+                            },
+                        };
+                        if let Err(e) = p.proxy.set_loop_status(want).await {
+                            tracing::warn!(err = %e, "set_loop_status failed");
+                        }
+                        emit_player_state(&p.proxy).await;
+                    }
+                }
                 _ => {}
             }
         }
@@ -491,6 +539,14 @@ async fn run() -> zbus::Result<()> {
             lyrics_state.cur_line = -1;
             lyrics_state.cur_word = -1;
             emit(serde_json::json!({ "ev": "lines", "source": res.source, "synced": lyrics_state.lines }));
+        }
+
+        // 播放器开关状态周期同步（外部在播放器里改 shuffle/loop 也能反映到面板）
+        if player.is_some() && now.duration_since(last_player_emit) >= Duration::from_secs(2) {
+            last_player_emit = now;
+            if let Some(p) = player.as_ref() {
+                emit_player_state(&p.proxy).await;
+            }
         }
 
         // 位置外推 → 行/词事件
