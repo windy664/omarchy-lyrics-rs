@@ -28,6 +28,13 @@ BarWidget {
   readonly property string themedRich: lyricsService && lyricsService.lineRich !== ""
     ? String(lyricsService.lineRich).replace(/#888888/g, String(Color.muted)) : ""
 
+  // 面板打开时顶栏改显示歌曲信息（歌词在面板里看），关闭时恢复当前歌词行
+  readonly property string trackInfo: {
+    if (!hasTrack) return ""
+    const t = lyricsService.track
+    return t.artist ? t.title + " — " + t.artist : t.title
+  }
+
   readonly property bool compactVisible: hasTrack && (!hideWhenIdleNormalized || isPlaying)
 
   // 广告插播中（后端识别 Spotify 广告位：artist 空 → status=ad + 广告文案）
@@ -102,14 +109,17 @@ BarWidget {
       }
     }
 
-    // 当前行歌词条（StyledText，词级已唱加粗/未唱置灰）；广告插播时显示广告文案
+    // 当前行歌词条（StyledText，词级已唱加粗/未唱置灰）；广告插播时显示广告文案；
+    // 面板打开时改显示 曲名 — 歌手（面板里已有歌词，避免信息重复）
     Text {
       anchors.verticalCenter: parent.verticalCenter
-      text: root.isAd ? (root.lyricsService.statusMsg || "广告插播中")
+      text: panel.open && root.hasTrack ? root.trackInfo
+            : root.isAd ? (root.lyricsService.statusMsg || "广告插播中")
             : root.themedRich !== ""
             ? root.themedRich
             : (root.hasTrack ? root.lyricsService.lineText : "")
-      textFormat: Text.StyledText
+      // 纯文本（歌曲信息/广告文案）用 PlainText：StyledText 模式下纯文本会被宿主主题染成链接蓝
+      textFormat: (panel.open && root.hasTrack) || root.isAd ? Text.PlainText : Text.StyledText
       font.family: root.bar ? root.bar.fontFamily : Style.font.family
       font.pixelSize: Style.font.body
       color: root.bar ? root.bar.barForeground : Color.bar.text

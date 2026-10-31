@@ -18,17 +18,42 @@ Item {
   // 面板高度自适应内容：有词时 = 5 行视窗，无词时 = 兜底文案高度
   implicitHeight: hasLyrics ? rowH * windowRows : Style.space(80)
 
-  // 暂无歌词兜底文案（部件不消失，由 BarWidget 保证）
-  Text {
+  // 暂无歌词兜底：有曲目时显示 曲名 + 歌手·专辑（附状态提示），无曲目时才提示没有音乐
+  Column {
     anchors.centerIn: parent
     visible: !root.hasLyrics
-    text: service && service.hasTrack
-          ? (service.status === "ad" ? (service.statusMsg || "广告插播中")
-            : service.status === "no_lyrics" ? "暂无歌词" : "正在查找歌词…")
-          : "没有正在播放的音乐"
-    font.family: Style.font.family
-    font.pixelSize: Style.font.subtitle
-    color: "#9A9A9A"
+    width: parent.width
+    spacing: Style.space(4)
+
+    readonly property bool isAd: service && service.status === "ad"
+
+    Text {
+      width: parent.width
+      horizontalAlignment: Text.AlignHCenter
+      elide: Text.ElideRight
+      text: !service || !service.hasTrack ? "没有正在播放的音乐"
+            : parent.isAd ? (service.statusMsg || "广告插播中")
+            : service.track.title
+      font.family: Style.font.family
+      font.pixelSize: Style.font.subtitle
+      font.bold: true
+      color: "#FFFFFF"
+    }
+    Text {
+      width: parent.width
+      horizontalAlignment: Text.AlignHCenter
+      elide: Text.ElideRight
+      visible: service && service.hasTrack && !parent.isAd
+      text: {
+        var parts = [service.track.artist || ""]
+        if (service.track.album) parts.push(service.track.album)
+        parts.push(service.status === "no_lyrics" ? "暂无歌词" : "正在查找歌词…")
+        return parts.join(" · ")
+      }
+      font.family: Style.font.family
+      font.pixelSize: Style.font.bodySmall
+      color: "#9A9A9A"
+    }
   }
 
   ListView {
