@@ -116,7 +116,7 @@ Item {
     visible: browseMode && hasLyrics
     color: Color.composed("bar.background", "bar.background-alpha", Color.background, 0.9)
     border.width: 1
-    border.color: Color.border
+    border.color: Color.popups.border
 
     Text {
       id: backText
