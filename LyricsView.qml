@@ -45,7 +45,8 @@ Item {
     anchors.centerIn: parent
     visible: !hasLyrics
     text: service && service.hasTrack
-          ? (service.status === "no_lyrics" ? "暂无歌词" : "正在查找歌词…")
+          ? (service.status === "ad" ? (service.statusMsg || "广告插播中")
+            : service.status === "no_lyrics" ? "暂无歌词" : "正在查找歌词…")
           : "没有正在播放的音乐"
     font.family: Style.font.family
     font.pixelSize: Style.font.subtitle

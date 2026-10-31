@@ -390,8 +390,14 @@ async fn run() -> zbus::Result<()> {
                     lyrics_state = LyricsState { lines: Vec::new(), cur_line: -1, cur_word: -1 };
                     bypass_cache = false;
                     lookup_gen += 1;
-                    lookup_at = Some(now + Duration::from_millis(700));
                     none_retries = 0;
+                    if p.track.artist.is_empty() {
+                        // Spotify 广告位特征（artist 为空）：不查词源，广告文案直接当字幕
+                        lookup_at = None;
+                        emit(serde_json::json!({ "ev": "status", "msg": "ad", "text": p.track.title }));
+                    } else {
+                        lookup_at = Some(now + Duration::from_millis(700));
+                    }
                 }
             }
         }

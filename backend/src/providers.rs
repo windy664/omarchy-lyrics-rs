@@ -62,10 +62,14 @@ fn enc(s: &str) -> String {
     out
 }
 
-fn get_text(agent: &ureq::Agent, url: &str) -> Option<String> {
+fn get_text_with(agent: &ureq::Agent, url: &str, headers: &[(&str, &str)]) -> Option<String> {
     // LRCLIB 高峰期常见瞬时 503，5xx 短退避重试两次；4xx 与网络错误不重试
     for attempt in 0..3u32 {
-        match agent.get(url).call() {
+        let mut req = agent.get(url);
+        for (k, v) in headers {
+            req = req.set(k, v);
+        }
+        match req.call() {
             Ok(resp) => return match resp.into_string() {
                 Ok(s) => Some(s),
                 Err(e) => {
@@ -88,6 +92,10 @@ fn get_text(agent: &ureq::Agent, url: &str) -> Option<String> {
         }
     }
     None
+}
+
+fn get_text(agent: &ureq::Agent, url: &str) -> Option<String> {
+    get_text_with(agent, url, &[])
 }
 
 // --- 词级源 ----------------------------------------------------------------
@@ -128,8 +136,65 @@ fn fetch_karalyr(agent: &ureq::Agent, m: &TrackMeta) -> Option<Vec<Line>> {
     if lines.is_empty() { None } else { Some(lines) }
 }
 
-// --- LRCLIB ----------------------------------------------------------------
+// --- 网易云音乐 -------------------------------------------------------------
 
+// 免鉴权官方 web API；不带头会被部分边缘节点拒绝
+const NETEASE_HEADERS: &[(&str, &str)] = &[
+    ("Referer", "https://music.163.com"),
+    ("Cookie", "appver=2.9.7"),
+];
+
+// 歌头元数据行（作词/作曲…）挤在开头 15 秒内，显示时是噪音
+const NETEASE_META_HINTS: &[&str] = &[
+    "作词", "作曲", "编曲", "制作", "混音", "母带", "和声", "填词", "录音", "吉他", "贝斯", "鼓",
+];
+
+fn netease_pick_song(body: &str, duration_sec: f64) -> Option<u64> {
+    let v: serde_json::Value = serde_json::from_str(body).ok()?;
+    let songs = v.get("result")?.get("songs")?.as_array()?;
+    if songs.is_empty() {
+        return None;
+    }
+    // 网易曲名常为简体（電燈膽→电灯胆），文本不可靠；时长 ±3s 内优先，否则取第一条
+    let pick = songs
+        .iter()
+        .find(|s| {
+            let d = s.get("duration").and_then(|d| d.as_f64()).unwrap_or(0.0) / 1000.0;
+            duration_sec > 0.0 && (d - duration_sec).abs() <= 3.0
+        })
+        .unwrap_or(&songs[0]);
+    pick.get("id").and_then(|i| i.as_u64())
+}
+
+fn fetch_netease(agent: &ureq::Agent, m: &TrackMeta) -> Option<Vec<Line>> {
+    let search = format!(
+        "https://music.163.com/api/search/get/web?s={}&type=1&limit=5",
+        enc(&format!(
+            "{} {}",
+            lyrics::clean_title(&m.title),
+            lyrics::clean_artist(&m.artist)
+        ))
+    );
+    let body = get_text_with(agent, &search, NETEASE_HEADERS)?;
+    let id = netease_pick_song(&body, m.duration_sec)?;
+    let lyric_url = format!(
+        "https://music.163.com/api/song/lyric?os=pc&id={}&lv=-1&kv=-1&tv=-1",
+        id
+    );
+    let body = get_text_with(agent, &lyric_url, NETEASE_HEADERS)?;
+    let v: serde_json::Value = serde_json::from_str(&body).ok()?;
+    let lrc = v.get("lrc")?.get("lyric")?.as_str()?;
+    if lrc.contains("暂无歌词") {
+        return None;
+    }
+    let lines: Vec<Line> = lyrics::parse_lrc(lrc)
+        .into_iter()
+        .filter(|l| !(l.t < 15.0 && NETEASE_META_HINTS.iter().any(|k| l.text.contains(k))))
+        .collect();
+    if lines.is_empty() { None } else { Some(lines) }
+}
+
+// --- LRCLIB ----------------------------------------------------------------
 fn candidate_from_json(v: &serde_json::Value) -> Option<LrcCandidate> {
     Some(LrcCandidate {
         track: v.get("trackName")?.as_str()?.to_string(),
@@ -231,8 +296,8 @@ pub fn lookup(tx: Sender<FetchResult>, meta: TrackMeta, bypass_cache: bool, gene
     let agent = http();
     let mut result: Option<FetchResult> = None;
 
-    // 词级（lrc.red ‖ karalyr 并发）与行级（LRCLIB）三路并发，词级优先、行级 12 秒兜底
-    // binimum.org 已退役：2026-10-31 实测其 API 307 重定向到 lrc.red，是同一家
+    // 词级（lrc.red ‖ karalyr）与行级（网易 ‖ LRCLIB）四路并发，词级优先、网易先于 LRCLIB、
+    // 行级 12 秒兜底。binimum.org 已退役：2026-10-31 实测其 API 307 重定向到 lrc.red，是同一家
     enum Msg {
         Word(String, Vec<Line>),
         Line(String, Vec<Line>, bool),
@@ -240,11 +305,14 @@ pub fn lookup(tx: Sender<FetchResult>, meta: TrackMeta, bypass_cache: bool, gene
     let (ltx, lrx) = std::sync::mpsc::channel::<Msg>();
     let ltx2 = ltx.clone();
     let ltx3 = ltx.clone();
+    let ltx4 = ltx.clone();
     let m1 = meta.clone();
     let m2 = meta.clone();
     let m3 = meta.clone();
+    let m4 = meta.clone();
     let agent1 = http();
     let agent2 = http();
+    let agent4 = http();
     std::thread::scope(|s| {
         s.spawn(move || {
             let query = format!(
@@ -262,6 +330,11 @@ pub fn lookup(tx: Sender<FetchResult>, meta: TrackMeta, bypass_cache: bool, gene
             }
         });
         s.spawn(move || {
+            if let Some(lines) = fetch_netease(&agent4, &m4) {
+                let _ = ltx4.send(Msg::Line("line:netease".into(), lines, false));
+            }
+        });
+        s.spawn(move || {
             if let Some((src, lines, inst)) = fetch_lrclib(&agent, &m2) {
                 let _ = ltx3.send(Msg::Line(src, lines, inst));
             }
@@ -272,7 +345,16 @@ pub fn lookup(tx: Sender<FetchResult>, meta: TrackMeta, bypass_cache: bool, gene
         while (word.is_none() || line.is_none()) && std::time::Instant::now() < deadline {
             match lrx.recv_timeout(Duration::from_millis(200)) {
                 Ok(Msg::Word(src, lines)) => word = Some((src, lines)),
-                Ok(Msg::Line(src, lines, inst)) => line = Some((src, lines, inst)),
+                Ok(Msg::Line(src, lines, inst)) => {
+                    // 行级内部网易优先（华语/港乐覆盖更好），LRCLIB 做兜底
+                    let replace = match &line {
+                        Some((cur, _, _)) => src == "line:netease" && cur != "line:netease",
+                        None => true,
+                    };
+                    if replace {
+                        line = Some((src, lines, inst));
+                    }
+                }
                 Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
                 Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
             }

@@ -89,7 +89,9 @@ BarWidget {
     // 当前行歌词条（StyledText，词级已唱加粗/未唱置灰）
     Text {
       anchors.verticalCenter: parent.verticalCenter
+      readonly property bool isAd: root.lyricsService && root.lyricsService.status === "ad"
       text: root.themedRich !== "" ? root.themedRich
+            : root.isAd ? (root.lyricsService.statusMsg || "")
             : (root.hasTrack ? root.lyricsService.lineText : "")
       textFormat: Text.StyledText
       font.family: root.bar ? root.bar.fontFamily : Style.font.family

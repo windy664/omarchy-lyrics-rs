@@ -22,7 +22,8 @@ Item {
   property int wordIndex: -1        // 行内当前词下标（词级源才有）
   property bool playing: false
   property real positionSec: 0
-  property string status: ""        // no_lyrics 等
+  property string status: ""        // no_lyrics / ad 等
+  property string statusMsg: ""     // status 附带文案（广告文案等）
   property bool backendUp: false
 
   readonly property bool hasTrack: track && track.title ? true : false
@@ -126,6 +127,7 @@ Item {
         break
       case "status":
         root.status = ev.msg || ""
+        root.statusMsg = ev.text || ""
         break
       default:
         break
