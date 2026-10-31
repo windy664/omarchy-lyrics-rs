@@ -168,7 +168,16 @@ BarWidget {
     borderSpec: Border.none()
 
     readonly property var scr: (bar && bar.screen) ? bar.screen : Quickshell.screens[0]
-    contentWidth: Math.round((scr ? scr.width : 1200) * root.setting("panelWidthPercent", 30) / 100)
+    // 宽度自适配：取「最长歌词行实测宽 + 边距」与「控制条隐式宽」的较大者，
+    // 上限仍为 panelWidthPercent（屏幕百分比），下限兜底 420，变化时平滑动画
+    readonly property real panelWidthCap: Math.round((scr ? scr.width : 1200) * root.setting("panelWidthPercent", 30) / 100)
+    readonly property real panelWidthNatural: Math.max(
+      (lyricsView.maxLineWidth || 0) + Style.space(32),
+      controls ? controls.implicitWidth : 0
+    )
+    property real panelWidth: Math.max(Style.space(360), Math.min(panelWidthCap, Math.round(panelWidthNatural + panel.padding * 2)))
+    Behavior on panelWidth { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
+    contentWidth: panelWidth
     // 高度贴合内容（3 行歌词 + 控制条），不再吃满屏幕百分比
     contentHeight: contentCol.implicitHeight + verticalContentInset
 
@@ -178,6 +187,7 @@ BarWidget {
       spacing: Style.space(10)
 
       LyricsView {
+        id: lyricsView
         width: parent.width
         height: implicitHeight
         service: root.lyricsService

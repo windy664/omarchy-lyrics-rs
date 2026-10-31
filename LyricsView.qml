@@ -15,8 +15,32 @@ Item {
   readonly property real rowH: Style.space(38)
   readonly property int windowRows: 3
 
-  // 面板高度自适应内容：有词时 = 5 行视窗，无词时 = 兜底文案高度
+  // 面板高度自适应内容：有词时 = 3 行视窗，无词时 = 兜底文案高度
   implicitHeight: hasLyrics ? rowH * windowRows : Style.space(80)
+
+  // 全部歌词行按非当前行字号实测的最大宽度（供面板宽度自适配，仅在换词时算一次）
+  readonly property real maxLineWidth: {
+    const lines = service && service.lines ? service.lines : []
+    let m = 0
+    for (let i = 0; i < lines.length; i++) {
+      const o = measureObj.createObject(root)
+      o.text = lines[i].text || ""
+      const w = o.implicitWidth
+      o.destroy()
+      if (w > m) m = w
+    }
+    return m
+  }
+
+  Component {
+    id: measureObj
+    Text {
+      visible: false
+      font.family: Style.font.family
+      font.pixelSize: Style.font.subtitle
+      font.bold: true
+    }
+  }
 
   // 暂无歌词兜底：有曲目时显示 曲名 + 歌手·专辑（附状态提示），无曲目时才提示没有音乐
   Column {

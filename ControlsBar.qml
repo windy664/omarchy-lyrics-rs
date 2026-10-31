@@ -173,6 +173,7 @@ Item {
       }
 
       ThemeSlider {
+        implicitWidth: Style.space(160)
         Layout.fillWidth: true
         enabled: root.duration > 0
         maximum: root.duration > 0 ? root.duration : 1

@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "local.lyrics-rs",
   "name": "Lyrics (Rust)",
-  "version": "0.3.6",
+  "version": "0.3.7",
   "author": "torin",
   "license": "MIT",
   "description": "Karaoke lyrics bar widget. Rust lyricsd backend does MPRIS + multi-source word-level lyrics; QML only renders.",
