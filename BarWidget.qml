@@ -108,6 +108,7 @@ BarWidget {
     anchors.fill: parent
     bar: root.bar
     text: ""
+    keepSpace: true // text 为空时 hasVisualContent=false 会整层隐藏，必须 keepSpace 才收得到手势
     interactive: root.compactVisible
     onPressed: function(b) {
       if (!root.compactVisible) return
