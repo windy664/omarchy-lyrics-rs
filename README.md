@@ -21,6 +21,7 @@
 | [docs/04-重写设计方案.md](docs/04-重写设计方案.md) | Rust 后端 + QML 前端的目标架构 |
 | [docs/05-任务清单与验收.md](docs/05-任务清单与验收.md) | 分阶段任务、每步验收标准 |
 | [docs/06-协作规范.md](docs/06-协作规范.md) | 用户偏好、红线、沟通方式（**接手必读**） |
+| [docs/07-体验基准-DynamicMusicPill.md](docs/07-体验基准-DynamicMusicPill.md) | 用户在 GNOME 时代的金标准交互、设计修订、退路备案 |
 
 ## 30 秒上手路径
 
