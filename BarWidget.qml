@@ -42,6 +42,17 @@ BarWidget {
     if (lyricsService) lyricsService.sendCommand(cmd)
   }
 
+  // IPC 远程开面板（omarchy shell local.lyrics-rs panel）
+  Connections {
+    target: root.lyricsService
+    function onPanelRequestedChanged() {
+      if (root.lyricsService && root.lyricsService.panelRequested) {
+        panel.open = true
+        root.lyricsService.panelRequested = false
+      }
+    }
+  }
+
   implicitHeight: barSize
   implicitWidth: contentRow.visible ? contentRow.implicitWidth : 0
   Behavior on implicitWidth {
