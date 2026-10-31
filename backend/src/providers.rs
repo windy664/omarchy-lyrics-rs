@@ -22,6 +22,7 @@ pub struct FetchResult {
     pub source: String, // word:lrc.red | word:binimum | lrclib | cache | none
     pub lines: Vec<Line>,
     pub instrumental: bool,
+    pub generation: u64, // 发起时的查询代号，main 侧用它丢弃换曲后迟到的过期结果
 }
 
 pub fn state_dir() -> PathBuf {
@@ -62,23 +63,31 @@ fn enc(s: &str) -> String {
 }
 
 fn get_text(agent: &ureq::Agent, url: &str) -> Option<String> {
-    match agent.get(url).call() {
-        Ok(resp) => match resp.into_string() {
-            Ok(s) => Some(s),
-            Err(e) => {
-                debug!(url, err = %e, "body read failed");
-                None
+    // LRCLIB 高峰期常见瞬时 503，5xx 短退避重试两次；4xx 与网络错误不重试
+    for attempt in 0..3u32 {
+        match agent.get(url).call() {
+            Ok(resp) => return match resp.into_string() {
+                Ok(s) => Some(s),
+                Err(e) => {
+                    debug!(url, err = %e, "body read failed");
+                    None
+                }
+            },
+            Err(ureq::Error::Status(code, _)) if code >= 500 && attempt < 2 => {
+                debug!(url, code, attempt, "server error, retrying");
+                std::thread::sleep(Duration::from_millis(800 * (1 << attempt)));
             }
-        },
-        Err(ureq::Error::Status(code, _)) => {
-            debug!(url, code, "http error");
-            None
-        }
-        Err(e) => {
-            debug!(url, err = %e, "request failed");
-            None
+            Err(ureq::Error::Status(code, _)) => {
+                debug!(url, code, "http error");
+                return None;
+            }
+            Err(e) => {
+                debug!(url, err = %e, "request failed");
+                return None;
+            }
         }
     }
+    None
 }
 
 // --- 词级源 ----------------------------------------------------------------
@@ -216,6 +225,7 @@ fn read_cache(path: &PathBuf) -> Option<FetchResult> {
         source: v.get("source").and_then(|s| s.as_str()).unwrap_or("cache").to_string(),
         lines: serde_json::from_value(v.get("lines").cloned()?).ok()?,
         instrumental: v.get("instrumental").and_then(|b| b.as_bool()).unwrap_or(false),
+        generation: 0,
     })
 }
 
@@ -230,13 +240,13 @@ fn write_cache(path: &PathBuf, r: &FetchResult) {
 }
 
 /// 完整查询入口（跑在工作线程里）。
-pub fn lookup(tx: Sender<FetchResult>, meta: TrackMeta, bypass_cache: bool) {
+pub fn lookup(tx: Sender<FetchResult>, meta: TrackMeta, bypass_cache: bool, generation: u64) {
     let start = std::time::Instant::now();
     let cache = cache_path(&meta.artist, &meta.title, &meta.album, meta.duration_sec);
     if !bypass_cache {
         if let Some(hit) = read_cache(&cache) {
             info!(artist = %meta.artist, title = %meta.title, source = %hit.source, "cache hit");
-            let _ = tx.send(hit);
+            let _ = tx.send(FetchResult { generation, ..hit });
             return;
         }
     }
@@ -277,13 +287,13 @@ pub fn lookup(tx: Sender<FetchResult>, meta: TrackMeta, bypass_cache: bool) {
             }
         }
         result = match (word, line) {
-            (Some((src, lines)), _) => Some(FetchResult { source: src, lines, instrumental: false }),
-            (None, Some((src, lines, inst))) => Some(FetchResult { source: src, lines, instrumental: inst }),
+            (Some((src, lines)), _) => Some(FetchResult { source: src, lines, instrumental: false, generation }),
+            (None, Some((src, lines, inst))) => Some(FetchResult { source: src, lines, instrumental: inst, generation }),
             (None, None) => None,
         };
     });
 
-    let final_result = result.unwrap_or(FetchResult { source: "none".into(), lines: Vec::new(), instrumental: false });
+    let final_result = result.unwrap_or(FetchResult { source: "none".into(), lines: Vec::new(), instrumental: false, generation });
     if final_result.source != "none" {
         write_cache(&cache, &final_result);
     }

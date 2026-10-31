@@ -167,6 +167,7 @@ async fn peek_player(conn: &Connection, bus: &str) -> Option<(String, Track)> {
         .ok()?
         .path("/org/mpris/MediaPlayer2")
         .ok()?
+        .cache_properties(zbus::proxy::CacheProperties::No)
         .build()
         .await
         .ok()?;
@@ -231,6 +232,8 @@ async fn build_player<'c>(conn: &'c Connection, bus: &str) -> Option<Player<'c>>
         .ok()?
         .path("/org/mpris/MediaPlayer2")
         .ok()?
+        // Spotify 从不发 Position 的 PropertiesChanged，zbus 默认缓存会让 position() 永远返回旧值
+        .cache_properties(zbus::proxy::CacheProperties::No)
         .build()
         .await
         .ok()?;
@@ -248,7 +251,13 @@ async fn build_player<'c>(conn: &'c Connection, bus: &str) -> Option<Player<'c>>
 async fn poll_player(p: &mut Player<'_>, last_track_key: &mut String) -> bool {
     let status = p.proxy.playback_status().await.unwrap_or_else(|_| p.status.clone());
     let rate = p.proxy.rate().await.unwrap_or(1.0);
-    let pos = p.proxy.position().await.unwrap_or(p.anchor_us);
+    let pos = match p.proxy.position().await {
+        Ok(v) => v,
+        Err(e) => {
+            tracing::warn!(err = %e, "position read failed");
+            p.anchor_us
+        }
+    };
     let md = p.proxy.metadata().await.unwrap_or_default();
     let track = metadata_to_track(&md);
 
@@ -342,6 +351,7 @@ async fn run() -> zbus::Result<()> {
 
     let mut lookup_at: Option<Instant> = None;
     let mut bypass_cache = false;
+    let mut lookup_gen: u64 = 0;
     let mut last_poll = Instant::now() - Duration::from_secs(3600);
     let mut last_position_emit = Instant::now();
     let mut last_playing = false;
@@ -375,6 +385,7 @@ async fn run() -> zbus::Result<()> {
                     emit_track(&p.track);
                     lyrics_state = LyricsState { lines: Vec::new(), cur_line: -1, cur_word: -1 };
                     bypass_cache = false;
+                    lookup_gen += 1;
                     lookup_at = Some(now + Duration::from_millis(700));
                 }
             }
@@ -396,7 +407,8 @@ async fn run() -> zbus::Result<()> {
                         let bypass = bypass_cache;
                         bypass_cache = false;
                         tracing::info!(artist = %meta.artist, title = %meta.title, "lookup spawned");
-                        std::thread::spawn(move || providers::lookup(tx, meta, bypass));
+                        let generation = lookup_gen;
+                        std::thread::spawn(move || providers::lookup(tx, meta, bypass, generation));
                     }
                 }
             }
@@ -408,6 +420,7 @@ async fn run() -> zbus::Result<()> {
                 Some("refresh") => {
                     tracing::info!("cmd refresh");
                     bypass_cache = true;
+                    lookup_gen += 1;
                     lookup_at = Some(now);
                 }
                 Some("seek") => {
@@ -423,8 +436,12 @@ async fn run() -> zbus::Result<()> {
             }
         }
 
-        // 抓取结果（单飞：一次只有一个查询线程）
+        // 抓取结果（单飞：一次只有一个查询线程；换曲/refresh 后的迟到结果按 gen 丢弃）
         while let Ok(res) = fetch_rx.try_recv() {
+            if res.generation != lookup_gen {
+                tracing::info!(source = %res.source, gen = res.generation, "stale fetch result dropped");
+                continue;
+            }
             tracing::info!(source = %res.source, lines = res.lines.len(), "fetch result");
             if res.source == "none" || res.lines.is_empty() {
                 lyrics_state.lines.clear();
