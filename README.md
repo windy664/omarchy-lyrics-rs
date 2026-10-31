@@ -1,67 +1,83 @@
 # omarchy-lyrics-rs
 
-Omarchy 顶栏歌词插件（Rust 重写版）：正在播放时，顶栏右侧显示 **封面缩略图 + 当前歌词条**，词级歌词逐字点亮卡拉OK，点击展开歌词全文。
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+![Rust](https://img.shields.io/badge/backend-Rust-dea584?logo=rust&logoColor=white)
+![QML](https://img.shields.io/badge/frontend-QML%20(Quickshell)-41CD52?logo=qt&logoColor=white)
 
-![效果图](docs/mockup-v1.png)
+**Karaoke-style lyrics for the Omarchy top bar**, rewritten in Rust. While music is playing, the bar shows the album art thumbnail plus the current lyric line with word-by-word highlighting; click it to open a floating lyrics panel.
 
-## 特性
+| Top bar | Lyrics panel |
+|---|---|
+| ![Top bar lyrics](docs/screenshots/bar.png) | ![Lyrics panel](docs/screenshots/panel.png) |
 
-- **顶栏歌词**：封面（20px 圆角）+ 当前行，扁平融入 Omarchy 顶栏，换行带宽度动画
-- **词级卡拉OK**：已唱字加粗亮色、未唱字置灰，逐字推进（源：lrc.red / karalyr / 网易，词轴并发竞争）
-- **多源降级**：词级 → LRCLIB 行级同步 → LRCLIB 纯文本 → “暂无歌词”（部件不消失）；LRCLIB 5xx 自动退避重试
-- **Spotify 广告识别**：检测到广告时不去查词源，顶栏直接显示广告文案，不误报“暂无歌词”
-- **鼠标手势**（顶栏小部件上）：左键开/关歌词面板，右键播放/暂停，中键下一曲，滚轮切歌（可改调音量）
-- **歌词面板**：点击小部件（或 `omarchy shell local.lyrics-rs panel`）展开；**3 行滚动视窗**，正在唱的行永远锁在正中间，其余行上下滚动，超长行省略号截断；点击任意行跳播
-- **面板控制条**：随机 / 循环（列表·单曲） / 上一曲 / 播放暂停 / 下一曲 / 重匹配歌词 + 进度条 seek；进度条为自绘主题色控件（iOS 风，无 accent 蓝）。注意：Spotify 官方 Linux 客户端不接受 MPRIS 对 Shuffle/LoopStatus 的写入，随机/循环按钮在该播放器上只显示状态、点击无效（mpv/VLC 等正常）
-- **主题跟随**：颜色全部取自 Omarchy 主题，昼夜切换无需重载
-- **稳定设计**：DBus/HTTP/时间同步全在 Rust 后端 lyricsd，QML 只渲染；后端崩溃指数退避自动重启
+> 🌏 简体中文说明见 [README.zh-CN.md](README.zh-CN.md)
 
-## 安装
+## Features
 
-依赖：Omarchy（Quickshell 0.3+）、Rust 工具链（构建后端）。
+- **Top-bar lyrics** — rounded album-art thumbnail + current line, blends flat into the Omarchy bar (width animates on track change)
+- **Word-level karaoke** — sung words bright & bold, unsung words dimmed, advancing word by word (sources: lrc.red / karalyr / NetEase, raced concurrently)
+- **Multi-source fallback** — word-level → LRCLIB line-synced → LRCLIB plain text → "no lyrics" (widget never disappears); LRCLIB 5xx errors back off and retry automatically
+- **Spotify ad detection** — when a Spotify ad plays, no lyrics lookup is wasted; the ad copy is shown in the bar instead
+- **Mouse gestures** (on the bar widget) — left-click toggles the panel, right-click play/pause, middle-click next track, scroll wheel switches tracks (configurable to volume)
+- **Lyrics panel** — open by clicking the widget (or `omarchy shell local.lyrics-rs panel`); a **3-row scrolling viewport** with the current line always locked in the center, all lines bold and centered, overlong lines ellipsized; click any line to seek there
+- **Panel controls** — shuffle / repeat (all · one) / previous / play-pause / next / re-match lyrics + a seek bar; the seek bar is a custom-drawn, theme-colored control (Apple-Music style, no accent blue). Note: the official Spotify Linux client ignores MPRIS writes to Shuffle/LoopStatus, so on Spotify those two buttons show the real state but clicks have no effect (mpv/VLC etc. work fully)
+- **Apple Music-style panel** — neutral white/gray palette, current line brightest, non-current lines dimmed by distance
+- **Robust by design** — all the fragile logic (DBus, HTTP, lyric timing, type parsing) lives in the Rust backend `lyricsd`; QML only renders. If the backend crashes it restarts with exponential backoff
+
+## Installation
+
+Requirements: Omarchy (Quickshell 0.3+), Rust toolchain (to build the backend).
 
 ```bash
-# 1. 构建并安装后端
+# 1. Build and install the backend
 git clone https://github.com/windy664/omarchy-lyrics-rs.git
 cd omarchy-lyrics-rs/backend
 cargo build --release
 cp target/release/lyricsd ~/.local/bin/
 
-# 2. 安装插件
+# 2. Install the plugin
 omarchy plugin add https://github.com/windy664/omarchy-lyrics-rs --enable
 ```
 
-在 Omarchy 设置里把 **Lyrics** 小部件加到顶栏即可。
+Then add the **Lyrics** widget to the top bar in Omarchy settings.
 
-## 设置
+## Configuration
 
-在 `~/.config/omarchy/shell.json` 的顶栏布局里给 `local.lyrics-rs` 加键（或 `omarchy bar set`），值即使看起来是布尔也按字符串容错：
+Keys live in the `local.lyrics-rs` widget entry of `~/.config/omarchy/shell.json` (or use `omarchy bar set`). Values are fault-tolerant: booleans stored as strings still work.
 
-| 键 | 说明 | 默认 |
-|----|------|------|
-| `hideWhenIdle` | 无播放（暂停）时隐藏小部件；设为 `false` 则暂停时保留当前行 | `true` |
-| `panelWidthPercent` | 歌词面板宽度（屏幕百分比） | `30` |
-| `wheelAction` | 滚轮动作：`track` 切歌 / `volume` 调音量 / `none` | `track` |
+| Key | Description | Default |
+|-----|-------------|---------|
+| `hideWhenIdle` | Hide the widget when nothing is playing (paused); set `false` to keep the current line visible while paused | `true` |
+| `panelWidthPercent` | Lyrics panel width (percentage of screen) | `30` |
+| `wheelAction` | Scroll-wheel action: `track` switch track / `volume` adjust volume / `none` | `track` |
 
-面板高度自动贴合内容（3 行歌词 + 控制条），无高度设置项。
+Panel height always fits its content (3 lyric rows + control bar); there is no height setting.
 
-## 歌词源
+### CLI
 
-四路并发竞争，先返回且带时间轴的赢：
+```bash
+omarchy shell local.lyrics-rs panel    # toggle the lyrics panel
+omarchy shell local.lyrics-rs refresh  # force a lyrics re-lookup (bypasses cache)
+omarchy shell local.lyrics-rs status   # JSON status: track / line / source / shuffle / loop …
+```
 
-| 优先级 | 源 | 说明 |
-|--------|-----|------|
-| 1 | lrc.red | Apple Music TTML 词级时间轴 |
-| 1 | karalyr.com | 开放卡拉OK库，词级（Enhanced LRC） |
-| 1 | 网易云音乐（line:netease） | 行级同步，中文歌命中率高 |
-| 2 | lrclib.net | 行级同步歌词（带 5xx 退避重试） |
-| 3 | lrclib.net | 纯文本按时长均分 |
+## Lyrics sources
 
-查询结果按曲目+时长（15 秒桶）落盘缓存于 `~/.local/state/omarchy-lyrics-rs/`。
+Five providers race concurrently; the first answer with usable timing wins:
 
-## 与原插件的关系
+| Priority | Source | Notes |
+|----------|--------|-------|
+| 1 | lrc.red | Apple Music TTML word-level timing |
+| 1 | karalyr.com | Open karaoke library, word-level (Enhanced LRC) |
+| 1 | NetEase Cloud Music (line:netease) | Line-synced, high hit rate for Chinese songs |
+| 2 | lrclib.net | Line-synced lyrics (with 5xx backoff retry) |
+| 3 | lrclib.net | Plain text, evenly distributed over the track duration |
 
-功能对标 [crmne/omarchy-lyrics](https://github.com/crmne/omarchy-lyrics)，因其在 Omarchy 4.0.6 上顶栏不渲染（[issue #22](https://github.com/crmne/omarchy-lyrics/issues/22)）且无回应而重写。架构上把会出错的逻辑（DBus、HTTP、歌词定位、类型解析）全部移入 Rust，QML 只做渲染——原插件的隐身 bug（设置存字符串 `"false"` 不被当布尔）在这套架构下天然免疫。开发过程分析见 [docs/](docs/00-背景.md)。
+Results are cached on disk per track + duration (15 s buckets) under `~/.local/state/omarchy-lyrics-rs/`.
+
+## Relationship to the original plugin
+
+Feature parity target: [crmne/omarchy-lyrics](https://github.com/crmne/omarchy-lyrics). It was rewritten because the original didn't render its bar widget on Omarchy 4.0.6 ([issue #22](https://github.com/crmne/omarchy-lyrics/issues/22)) and got no response. Architecturally, everything that can fail (DBus, HTTP, lyric positioning, type parsing) was moved into Rust, and QML only renders — which makes the original's invisibility bug (settings stored as the string `"false"` not being treated as a boolean) impossible by construction. Development notes live in [docs/](docs/00-背景.md) (Chinese).
 
 ## License
 
