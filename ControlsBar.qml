@@ -1,12 +1,10 @@
 import QtQuick
 import QtQuick.Layouts
-import Quickshell
-import Quickshell.Io
 import qs.Commons
 import qs.Ui
 
-// 面板底部控制区：随机/循环/上一曲/播放暂停/下一曲/重匹配歌词 + seek 进度条 + 音量条。
-// 全部经 Service.sendCommand 下发（音量走 wpctl 主音量）；MPRIS 不可用时后端自行忽略。
+// 面板底部控制区：随机/循环/上一曲/播放暂停/下一曲/重匹配歌词 + seek 进度条。
+// 全部经 Service.sendCommand 下发；MPRIS 不可用时后端自行忽略。
 // 注意：Spotify 官方 Linux 客户端不接受 MPRIS 对 Shuffle/LoopStatus 的写入（只读），
 // 按钮在该播放器上显示真实状态但点击无效；mpv/VLC 等正常播放器完全可用。
 Item {
@@ -30,12 +28,6 @@ Item {
     var s = Math.max(0, Math.floor(sec))
     return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0")
   }
-
-  function readVolume() {
-    volGet.running = true
-  }
-
-  Component.onCompleted: readVolume()
 
   component CtrlButton: Text {
     property var action: null
@@ -121,22 +113,6 @@ Item {
     }
   }
 
-  Process {
-    id: volGet
-    command: ["sh", "-c", "wpctl get-volume @DEFAULT_AUDIO_SINK@"]
-    stdout: SplitParser {
-      onRead: function(data) {
-        const s = String(data)
-        const m = s.match(/([0-9.]+)/)
-        if (m) root.volValue = Math.min(parseFloat(m[1]), 1.0)
-        root.volMuted = /MUTED/.test(s)
-      }
-    }
-  }
-
-  property real volValue: 0
-  property bool volMuted: false
-
   ColumnLayout {
     id: col
     anchors.left: parent.left
@@ -213,45 +189,5 @@ Item {
         color: Color.muted
       }
     }
-
-    RowLayout {
-      Layout.fillWidth: true
-      spacing: Style.space(10)
-
-      CtrlButton {
-        Layout.preferredWidth: Style.font.subtitle * 1.2
-        font.pixelSize: Style.font.subtitle
-        text: "󰕾"
-        dimmed: root.volMuted
-        action: function() {
-          Util.execDetached("wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle")
-          muteSync.restart()
-        }
-      }
-
-      ThemeSlider {
-        id: volSlider
-        Layout.fillWidth: true
-        maximum: 1.0
-        value: root.volMuted ? 0 : root.volValue
-        onReleased: function(v) {
-          Util.execDetached("wpctl set-volume @DEFAULT_AUDIO_SINK@ " + Math.min(v, 1.5).toFixed(2))
-          muteSync.restart()
-        }
-      }
-
-      Text {
-        text: Math.round(volSlider.shown * 100) + "%"
-        font.family: Style.font.family
-        font.pixelSize: Style.font.bodySmall
-        color: Color.muted
-      }
-    }
-  }
-
-  Timer {
-    id: muteSync
-    interval: 200
-    onTriggered: root.readVolume()
   }
 }
