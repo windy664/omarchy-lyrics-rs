@@ -90,8 +90,20 @@ Item {
     anchors.leftMargin: Style.space(16)
     anchors.rightMargin: Style.space(16)
 
-    model: root.service ? root.service.lines : []
-    currentIndex: root.currentLine
+    // 模型首尾各补 pad 个空槽：列表开头/结尾时当前行也能钉在正中间，
+    // 否则 StrictlyEnforceRange 被钳住，空位全挤到一侧，看起来像行距突变
+    readonly property int pad: Math.floor(root.windowRows / 2)
+    readonly property var paddedLines: {
+      const ls = root.service && root.service.lines ? root.service.lines : []
+      const head = []
+      const tail = []
+      for (let i = 0; i < pad; i++) { head.push(null); tail.push(null) }
+      return head.concat(ls, tail)
+    }
+
+    model: root.hasLyrics ? root.paddedLines : []
+    // 有词但行号未定（-1）时钉到首槽，避免开局闪跳
+    currentIndex: root.currentLine >= 0 ? root.currentLine + pad : 0
     interactive: false
 
     // StrictlyEnforceRange：无论怎么动，当前行永远钉在视窗正中的槽位
@@ -110,24 +122,27 @@ Item {
       width: listView.width
       height: root.rowH
 
-      readonly property bool isCurrent: index === root.currentLine
+      readonly property bool isPad: modelData === null
+      readonly property bool isCurrent: !isPad && index === root.currentLine + listView.pad
       // iOS Apple Music 同款：中性纯白（不用主题前景——Catppuccin 文字色带薰衣草偏紫），
       // 当前行实、未唱词虚（约 40% 透明度），非当前行纯透明度淡化
       readonly property string dimForeground: "#66FFFFFF"
 
-      opacity: isCurrent ? 1.0 : (Math.abs(index - root.currentLine) === 1 ? 0.62 : 0.45)
+      opacity: isPad ? 0 : (isCurrent ? 1.0 : (Math.abs(index - (root.currentLine + listView.pad)) <= 1 ? 0.62 : 0.45))
       Behavior on opacity { NumberAnimation { duration: 180 } }
 
       Text {
         anchors.verticalCenter: parent.verticalCenter
         width: parent.width
+        visible: !parent.isPad
         // 当前行用后端推送的 rich（词级逐词点亮），其余行纯文本
-        text: isCurrent && root.service && root.service.lineRich !== ""
-              ? String(root.service.lineRich).replace(/#888888/g, root.dimForeground)
-              : modelData.text
+        text: parent.isPad ? ""
+              : parent.isCurrent && root.service && root.service.lineRich !== ""
+              ? String(root.service.lineRich).replace(/#888888/g, parent.dimForeground)
+              : parent.modelData.text
         textFormat: Text.StyledText
         font.family: Style.font.family
-        font.pixelSize: root.isCurrent ? Style.font.heading : Style.font.subtitle
+        font.pixelSize: isCurrent ? Style.font.heading : Style.font.subtitle
         // iOS 同款：所有歌词行一律加粗，当前/非当前只靠字号与透明度区分
         font.bold: true
         color: "#FFFFFF"
