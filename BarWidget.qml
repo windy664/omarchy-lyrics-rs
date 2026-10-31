@@ -30,6 +30,11 @@ BarWidget {
 
   readonly property bool compactVisible: hasTrack && (!hideWhenIdleNormalized || isPlaying)
 
+  // 广告插播中（后端识别 Spotify 广告位：artist 空 → status=ad + 广告文案）
+  // 注意：必须挂在 root 上——此前定义在 Text 内部，绑定里 root.isAd 是 undefined，
+  // QML 静默返回 falsy，广告字幕从未生效过
+  readonly property bool isAd: lyricsService ? lyricsService.status === "ad" : false
+
   // 手势设置：滚轮动作（track=切歌 / volume=调音量 / none），经 manifest schema 暴露
   readonly property string wheelAction: {
     const v = setting("wheelAction", "track")
@@ -97,10 +102,9 @@ BarWidget {
       }
     }
 
-    // 当前行歌词条（StyledText，词级已唱加粗/未唱置灰）
+    // 当前行歌词条（StyledText，词级已唱加粗/未唱置灰）；广告插播时显示广告文案
     Text {
       anchors.verticalCenter: parent.verticalCenter
-      readonly property bool isAd: root.lyricsService && root.lyricsService.status === "ad"
       text: root.isAd ? (root.lyricsService.statusMsg || "广告插播中")
             : root.themedRich !== ""
             ? root.themedRich
