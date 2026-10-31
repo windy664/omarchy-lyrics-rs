@@ -30,6 +30,18 @@ BarWidget {
 
   readonly property bool compactVisible: hasTrack && (!hideWhenIdleNormalized || isPlaying)
 
+  // 手势设置：滚轮动作（track=切歌 / volume=调音量 / none），经 manifest schema 暴露
+  readonly property string wheelAction: {
+    const v = setting("wheelAction", "track")
+    return (v === "volume" || v === "none") ? v : "track"
+  }
+
+  property real wheelAccum: 0
+
+  function sendPlayer(cmd) {
+    if (lyricsService) lyricsService.sendCommand(cmd)
+  }
+
   implicitHeight: barSize
   implicitWidth: contentRow.visible ? contentRow.implicitWidth : 0
   Behavior on implicitWidth {
@@ -88,11 +100,32 @@ BarWidget {
     }
   }
 
-  MouseArea {
+  // 手势基座：第一方 WidgetButton（clock/microphone 同款），支持左/右/中键 + 滚轮
+  // 左键=开关面板；右键=播放暂停；中键=下一曲；滚轮=切歌（或按设置调音量）
+  WidgetButton {
     anchors.fill: parent
-    enabled: compactVisible
-    cursorShape: compactVisible ? Qt.PointingHandCursor : Qt.ArrowCursor
-    onClicked: panel.open = !panel.open
+    bar: root.bar
+    text: ""
+    interactive: root.compactVisible
+    onPressed: function(b) {
+      if (!root.compactVisible) return
+      if (b === Qt.RightButton) root.sendPlayer({ "cmd": "toggle" })
+      else if (b === Qt.MiddleButton) root.sendPlayer({ "cmd": "next" })
+      else panel.open = !panel.open
+    }
+    onWheelMoved: function(delta) {
+      if (!root.compactVisible) return
+      if (root.wheelAction === "none") return
+      if (root.wheelAction === "volume") {
+        const r = Util.wheelSteps(root.wheelAccum, delta)
+        root.wheelAccum = r.remainder
+        for (let i = 0; i < Math.abs(r.steps); i++)
+          Util.execDetached("wpctl set-volume @DEFAULT_AUDIO_SINK@ " + (r.steps > 0 ? "5%+" : "5%-"))
+      } else {
+        // 与第一方 media 组件同向：滚轮向上=上一曲
+        root.sendPlayer(delta > 0 ? { "cmd": "prev" } : { "cmd": "next" })
+      }
+    }
   }
 
   // 展开歌词面板（点击展开，不是 hover；尺寸按 shell.json 设置的屏幕百分比）
@@ -107,9 +140,23 @@ BarWidget {
     contentWidth: Math.round((scr ? scr.width : 1200) * root.setting("panelWidthPercent", 30) / 100)
     contentHeight: Math.round((scr ? scr.height : 800) * root.setting("panelHeightPercent", 85) / 100)
 
-    LyricsView {
-      service: root.lyricsService
+    Column {
       anchors.fill: parent
+      spacing: Style.space(10)
+
+      LyricsView {
+        width: parent.width
+        height: parent.height - controls.implicitHeight - parent.spacing
+        service: root.lyricsService
+      }
+
+      ControlsBar {
+        id: controls
+        width: parent.width
+        visible: root.hasTrack
+        service: root.lyricsService
+        bar: root.bar
+      }
     }
   }
 }

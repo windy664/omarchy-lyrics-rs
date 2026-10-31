@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "local.lyrics-rs",
   "name": "Lyrics (Rust)",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "author": "torin",
   "license": "MIT",
   "description": "Karaoke lyrics bar widget. Rust lyricsd backend does MPRIS + multi-source word-level lyrics; QML only renders.",
@@ -45,6 +45,12 @@
         "min": 40,
         "max": 100,
         "defaultValue": 85
+      },
+      {
+        "key": "wheelAction",
+        "type": "string",
+        "label": "滚轮动作：track=切歌 / volume=调音量 / none",
+        "defaultValue": "track"
       }
     ]
   }

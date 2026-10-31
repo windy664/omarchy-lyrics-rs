@@ -89,6 +89,8 @@ Item {
         font.pixelSize: root.isCurrent ? Style.font.heading : Style.font.subtitle
         font.bold: isCurrent
         color: isCurrent ? Color.accent : Color.muted
+        // DMP 基准：新当前行淡入（颜色渐变 + 既有的透明度过渡）
+        Behavior on color { ColorAnimation { duration: 250 } }
         wrapMode: Text.WordWrap
         verticalAlignment: Text.AlignVCenter
       }

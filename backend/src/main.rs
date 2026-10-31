@@ -27,6 +27,9 @@ trait MprisPlayer {
     #[zbus(property)]
     fn metadata(&self) -> zbus::Result<HashMap<String, OwnedValue>>;
     fn set_position(&self, track_id: ObjectPath<'_>, position: i64) -> zbus::Result<()>;
+    fn play_pause(&self) -> zbus::Result<()>;
+    fn next(&self) -> zbus::Result<()>;
+    fn previous(&self) -> zbus::Result<()>;
 }
 
 #[proxy(interface = "org.mpris.MediaPlayer2", assume_defaults = true)]
@@ -429,6 +432,27 @@ async fn run() -> zbus::Result<()> {
                             if let Err(e) = p.proxy.set_position(tp, (sec * 1e6) as i64).await {
                                 tracing::warn!(err = %e, "set_position failed");
                             }
+                        }
+                    }
+                }
+                Some("toggle") => {
+                    if let Some(p) = player.as_ref() {
+                        if let Err(e) = p.proxy.play_pause().await {
+                            tracing::warn!(err = %e, "play_pause failed");
+                        }
+                    }
+                }
+                Some("next") => {
+                    if let Some(p) = player.as_ref() {
+                        if let Err(e) = p.proxy.next().await {
+                            tracing::warn!(err = %e, "next failed");
+                        }
+                    }
+                }
+                Some("prev") => {
+                    if let Some(p) = player.as_ref() {
+                        if let Err(e) = p.proxy.previous().await {
+                            tracing::warn!(err = %e, "previous failed");
                         }
                     }
                 }
