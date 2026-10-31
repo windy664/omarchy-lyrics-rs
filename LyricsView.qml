@@ -79,7 +79,8 @@ Item {
         textFormat: Text.StyledText
         font.family: Style.font.family
         font.pixelSize: root.isCurrent ? Style.font.heading : Style.font.subtitle
-        font.bold: isCurrent
+        // iOS 同款：所有歌词行一律加粗，当前/非当前只靠字号与透明度区分
+        font.bold: true
         color: "#FFFFFF"
         // 单行槽位：超长行省略号截断，保证视窗永远是整齐的 3 行；整行水平居中
         elide: Text.ElideMiddle
