@@ -62,13 +62,14 @@ Item {
       height: root.rowH
 
       readonly property bool isCurrent: index === root.currentLine
-      // 当前行整体蓝调：已唱纯 accent，未唱半透明 accent（muted 在浅色面板上看着发白）
-      readonly property string unsungColor: {
-        const a = String(Color.accent)
-        return "#" + "78" + (a[0] === "#" ? a.slice(1) : a)
+      // iOS Apple Music 同款：全程只有主题主文字色一种色调，
+      // 当前行实、未唱词虚（约 40% 透明度），非当前行纯透明度淡化，不掺 accent 等第三色
+      readonly property string dimForeground: {
+        const f = String(Color.foreground)
+        return "#" + "66" + (f[0] === "#" ? f.slice(1) : f)
       }
 
-      opacity: isCurrent ? 1.0 : (Math.abs(index - root.currentLine) === 1 ? 0.7 : 0.45)
+      opacity: isCurrent ? 1.0 : (Math.abs(index - root.currentLine) === 1 ? 0.45 : 0.28)
       Behavior on opacity { NumberAnimation { duration: 180 } }
 
       Text {
@@ -76,13 +77,13 @@ Item {
         width: parent.width
         // 当前行用后端推送的 rich（词级逐词点亮），其余行纯文本
         text: isCurrent && root.service && root.service.lineRich !== ""
-              ? String(root.service.lineRich).replace(/#888888/g, root.unsungColor)
+              ? String(root.service.lineRich).replace(/#888888/g, root.dimForeground)
               : modelData.text
         textFormat: Text.StyledText
         font.family: Style.font.family
         font.pixelSize: root.isCurrent ? Style.font.heading : Style.font.subtitle
         font.bold: isCurrent
-        color: isCurrent ? Color.accent : Color.foreground
+        color: Color.foreground
         // 单行槽位：超长行省略号截断，保证视窗永远是整齐的 5 行
         elide: Text.ElideMiddle
         verticalAlignment: Text.AlignVCenter
