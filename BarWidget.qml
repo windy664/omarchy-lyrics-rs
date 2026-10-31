@@ -109,17 +109,18 @@ BarWidget {
       }
     }
 
-    // 当前行歌词条（StyledText，词级已唱加粗/未唱置灰）；广告插播时显示广告文案；
-    // 面板打开时改显示 曲名 — 歌手（面板里已有歌词，避免信息重复）
+    // 顶栏文字优先级：广告文案 > 词级富文本歌词行 > 行级纯文本 > 歌曲信息（查词中/无词/面板打开时）；
+    // 只有富文本歌词用 StyledText，其余一律 PlainText（StyledText 下纯文本会被宿主渲染成链接蓝）
+    readonly property bool showRich: !root.isAd && !(panel.open && root.hasTrack) && root.themedRich !== ""
+
     Text {
       anchors.verticalCenter: parent.verticalCenter
-      text: panel.open && root.hasTrack ? root.trackInfo
-            : root.isAd ? (root.lyricsService.statusMsg || "广告插播中")
-            : root.themedRich !== ""
-            ? root.themedRich
-            : (root.hasTrack ? root.lyricsService.lineText : "")
-      // 纯文本（歌曲信息/广告文案）用 PlainText：StyledText 模式下纯文本会被宿主主题染成链接蓝
-      textFormat: (panel.open && root.hasTrack) || root.isAd ? Text.PlainText : Text.StyledText
+      text: root.isAd ? (root.lyricsService.statusMsg || "广告插播中")
+            : root.showRich ? root.themedRich
+            : root.hasTrack
+            ? (root.lyricsService.lineText !== "" ? root.lyricsService.lineText : root.trackInfo)
+            : ""
+      textFormat: root.showRich ? Text.StyledText : Text.PlainText
       font.family: root.bar ? root.bar.fontFamily : Style.font.family
       font.pixelSize: Style.font.body
       color: root.bar ? root.bar.barForeground : Color.bar.text
