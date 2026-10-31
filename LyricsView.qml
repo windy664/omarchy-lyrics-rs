@@ -7,6 +7,9 @@ import qs.Ui
 Item {
   id: root
 
+  Component.onCompleted: console.log("[lyrics] LyricsView loaded, rowH =", rowH,
+                                     "rows =", windowRows, "winH =", rowH * windowRows)
+
   property var service: null
   readonly property int currentLine: service ? service.lineIndex : -1
   readonly property bool hasLyrics: service && service.lines && service.lines.length > 0
