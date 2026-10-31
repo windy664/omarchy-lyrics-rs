@@ -92,7 +92,7 @@ BarWidget {
     anchors.fill: parent
     enabled: compactVisible
     cursorShape: compactVisible ? Qt.PointingHandCursor : Qt.ArrowCursor
-    onClicked: panel.open()
+    onClicked: panel.open = !panel.open
   }
 
   // 展开歌词面板（点击展开，不是 hover；尺寸按 shell.json 设置的屏幕百分比）
