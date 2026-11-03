@@ -1,3 +1,9 @@
+<div align="center">
+
+<img src="assets/banner.svg" alt="omarchy-lyrics-rs" width="100%">
+
+</div>
+
 # omarchy-lyrics-rs
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
